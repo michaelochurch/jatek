@@ -87,11 +87,17 @@ runInteractT remt r0 s0 players =
     M cont ->
       cont >>= (\x -> runInteractT x r0 s0 players)
     where badPlayerId i = error $ "given bad player ID of " ++ (show i)
-  
+
 instance (Monad m) => MonadState s (InteractT i s v t m) where
   get     = Stateful $ \s -> (Terminal s, s)
   put s   = Stateful $ \_ -> (Terminal (), s)
   state f = Stateful $ \s -> first Terminal (f s)
+
+getRand :: InteractT i s v t m RNGState
+getRand = Random $ \r -> (Terminal r, r)
+
+setRand :: RNGState -> InteractT i s v t m ()
+setRand r = Random $ \_ -> (Terminal (), r)
 
 instance MonadTrans (InteractT i s v t) where
   lift ma = M $ Terminal <$> ma
@@ -105,151 +111,109 @@ send view ids = Send view ids (Terminal ())
 getActions :: (Monad m) => [i] -> InteractT i s v t m [t]
 getActions ids = Await ids return
 
--- det :: (s -> [i] -> [t]) -> (s -> [i] -> [t] -> RNGState -> (s, RNGState))
--- det f s0 is as rng =  ((f s0 is as), rng)
-
-type Actions i t = M.Map i t
-
--- --data PostUpdate s = Ready s | AwaitRandom s
-
-data Game i s v t m a =
-  Game {init       :: RNGState -> s,
-        allPlayers :: s -> [i],
+data Game i s v t a =
+  Game {allPlayers :: s -> [i],
         makeView   :: s -> i -> v,
         
         active     :: s -> [i],
         legal      :: v -> i -> t -> Bool,
 
-        update     :: s -> [i] -> [t] -> RNGState -> (s, RNGState),
-        terminal   :: s -> Maybe a,
-        logIt      :: String -> m ()}
+        update     :: s -> [i] -> [t] -> (State RNGState s),
+        terminal   :: s -> Maybe a}
 
-legalSt :: Game i s v t m a -> s -> i -> t -> Bool
+legalSt :: Game i s v t a -> s -> i -> t -> Bool
 legalSt game@(Game {..}) st i act = (legal (makeView st i) i act)
 
-sendViews :: (Monad m) => Game i s v t m a -> s -> InteractT i s v t m ()
+sendViews :: (Monad m) => Game i s v t a -> s -> InteractT i s v t m ()
 sendViews game@(Game {..}) st =
   forM_ (allPlayers st) $ \i -> send (makeView st i) [i]
 
-pollPlayers :: (Monad m) => Game i s v t m a -> s -> InteractT i s v t m [t]
+-- pollPlayers handles the case where it gets illegal actions, but good-faith
+-- clients should check for legality.
+
+pollPlayers :: (Monad m) => Game i s v t a -> s -> InteractT i s v t m [t]
 pollPlayers game@(Game {..}) st = do
   let is = active st
   as <- getActions is
   if all (\(i, a) -> legalSt game st i a) (zip is as)
     then return as
     else do -- Someone did something illegal. Poll again.
-      lift . logIt $ "Illegal action from client!!" 
+      --lift . logIt $ "Illegal action from client!!" 
       pollPlayers game st
 
-ignore :: Monad m => a -> m ()
-ignore = const (return ())
+interpretGame :: (Eq v, Monad m, Show v, Show a) => Game i s v t a -> InteractT i s v t m a
+interpretGame game@(Game {..}) = do
+  st <- get
+  case terminal st of
+    Just result -> return result
+    Nothing     -> do
+      let playerIds = active st
+      actions   <- pollPlayers game st
+      oldRand   <- getRand
+      let (newSt, newRand) = (update st playerIds actions) `runState` oldRand
+      setRand newRand
+      put newSt
+      sendViews game newSt
+      interpretGame game
 
+ioPlayerPrompt :: (Show i, Read t) => i -> IO t
+ioPlayerPrompt pId = do
+  putStr $ "[" ++ (show pId) ++ "] Action? "
+  out <- read <$> getLine
+  putStrLn ""
+  return out
 
+ioPlayer :: (Show v, Show i, Read t) => i -> Player i v t IO
+ioPlayer pId = Player {playerId     = pId,
+                       handleView   = print,
+                       chooseAction = ioPlayerPrompt pId}
 
--- interpretGame :: (Eq v, Monad m, Show v) => Game i s v t m a -> InteractT i s v t m a
--- interpretGame game@(Game {..}) = do
---   st <- get
---   case terminal st of
---     Just result -> (logIt $ "Finished with result " ++ result) >> return result
---     Nothing     -> do
---       sendViews st (active st)
---       undefined
+mkIoPlayers :: (Show v, Ord i, Show i, Read t) => [i] -> Players i v t IO
+mkIoPlayers pIds = M.fromList $ map (\i -> (i, ioPlayer i)) pIds
 
+-- Nim Stuff
 
--- -- interpretGame :: (Monad m) => Game s v e t m a -> PlayT s e t m a
--- -- interpretGame game@(Game {..}) = do
--- --   st <- getUserState
--- --   case terminal st of
--- --     Just result  -> return result
--- --     Nothing      -> undefined
+data NimPlayerId = First | Second deriving (Eq, Ord, Show, Read)
 
--- -- case terminal st of
---   --   Just a -> return a
---   --   Nothing -> undefined
+nextPlayer :: NimPlayerId -> NimPlayerId
+nextPlayer First  = Second
+nextPlayer Second = First
 
--- -- case terminal st of
---   --   Just a -> M (onLoggable $ LResult a) >> (return a)
---   --   Nothing -> undefined
-  
-  
+type NimState = (Int, NimPlayerId)
 
--- type NimState = (Int, PlayerId)
+type NimView = NimState -- perfect information
 
--- other :: PlayerId -> PlayerId
--- other n = (n + 1) `rem` 2
+data NimAction = Take Int deriving (Eq, Show, Read)
 
--- type NimView = NimState
+type NimResult = NimPlayerId -- who won
 
--- data NimEvent = Change NimView | Winner PlayerId
+nimMaxTake :: Int
+nimMaxTake = 4
 
--- data NimAction = Take Int
+nimLegal :: NimView -> NimPlayerId -> NimAction -> Bool
+nimLegal (nLeft, activePId) pId (Take n) =
+  activePId == pId && n <= (min nLeft nimMaxTake)
 
--- nimGame :: (Monad m) => Int -> Game NimState NimView NimEvent NimAction m PlayerId
--- nimGame n = Game {init = return (n, 0)}
+nimUpdate :: NimState -> [NimPlayerId] -> [NimAction] -> State RNGState NimState
+nimUpdate (tokens, pId) [pId'] [(Take n)] | pId == pId' =
+  return $ (tokens - n, nextPlayer pId)
+nimUpdate _ _ _ = error "Illegal action configuration."
 
+nimTerminal (0, pId) = Just $ nextPlayer pId
+nimTerminal _        = Nothing
 
+nim :: Game NimPlayerId NimState NimView NimAction NimResult
+nim = Game {allPlayers    = const [First, Second],
+            makeView      = \st _ -> st,
 
+            active        = \(_, pId) ->  [pId],
+            legal         = nimLegal,
+            
+            update        = nimUpdate,
+            terminal      = nimTerminal}
 
-
--- class Game a where
---   type Options a
---   type State a
---   type View a
---   type PlayerId a
---   type Result a
---   type Action a
-  
---   new :: a -> Options a    -> State a
---   terminal :: a -> State a -> Maybe (Result a)
---   allPlayers :: a -> State a -> [PlayerId a]
---   view :: a -> State a -> PlayerId a -> View a
---   isLegal :: a -> View a -> PlayerId a -> Maybe (Action a) -> Bool
-
---   -- players must know legality of an Action based on the View they have.
---   -- TODO: spell the contract b/w isLegal, view, and isLegalSt out formally.
-  
---   isLegalSt :: a -> State a -> PlayerId a -> Maybe (Action a) -> Bool
---   isLegalSt g s id a = isLegal g (view g s id) id a
-  
---   update :: a -> State a -> [(PlayerId a, Action a)] -> State a
-
--- type Turn a    = [(PlayerId a, Action a)]
--- type History a = [(State a, Turn a)]
-
--- legalityCheck :: (Game g, Eq (PlayerId g)) =>
---                  g -> (State g) -> [(PlayerId g, Action g)] -> Bool
--- legalityCheck game state actions =
---   all check (allPlayers game state)
---   where check playerId = isLegalSt game state playerId (lookup playerId actions)
-
--- class (Game g, Monad m) => Player m g a where
---   play :: a -> g -> View g -> PlayerId g -> m (Maybe (Action g))
-
--- collectActions :: (Game g, Monad m, Player m g p) => g -> State g -> [(PlayerId g, p)] -> m [(PlayerId g, Action g)]
--- collectActions game state players =
---   foldM f [] players
---   where f actions (playerId, player) = do
---           let v = view game state playerId
---           action <- play player game v playerId
---           case action of
---             Nothing -> return actions
---             Just a  -> return ((playerId, a):actions)
-
--- fullGame :: (Game g, Monad m, Player m g p, Eq (PlayerId g)) =>
---             g -> Options g -> [(PlayerId g, p)] -> Bool -> m (Result g, History g)
--- fullGame game opts players checkLegality =
---   loop [] initState
---   where initState = new game opts
---         loop acc state =
---           case terminal game state of
---             Just result -> return (result, acc)
---             Nothing -> do
---               actions <- collectActions game state players
---               when checkLegality $
---                 if legalityCheck game state actions
---                 then return ()
---                 else error "illegal action"
---               let newState = update game state actions
---                   newAcc   = (state,actions):acc
---               loop newAcc newState
-
+demo :: IO ()
+demo = do
+  result <-runInteractT (interpretGame nim) (mkStdGen 0) (16, First) players
+  putStrLn $ "!! Winner was " ++ (show result)
+  where players = mkIoPlayers [First, Second]
