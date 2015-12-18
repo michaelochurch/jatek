@@ -1,56 +1,45 @@
-{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses, TypeFamilies #-}
-
 module Games.Nim where
 
+import Control.Monad.State.Strict
+import System.Random
+
 import Jatek.Core
-import System.Random (randomRIO)
 
-data NimGame = NimGame deriving (Show, Eq)
+data NimPlayerId = First | Second deriving (Eq, Ord, Show, Read)
 
-data NimPlayerId = First | Second deriving (Show, Eq)
+nextPlayer :: NimPlayerId -> NimPlayerId
+nextPlayer First  = Second
+nextPlayer Second = First
 
-other :: NimPlayerId -> NimPlayerId
-other Second = First
-other First = Second
+type NimState = (Int, NimPlayerId)
 
-data RandomNimPlayer = RandomNimPlayer
+type NimView = NimState -- perfect information
 
-nimLimit :: Int
-nimLimit = 3
+data NimAction = Take Int deriving (Eq, Show, Read)
 
-instance Player IO NimGame RandomNimPlayer where
-  play _ _ (n, id) myId =
-    if myId == id then do
-      let maxPlay = min nimLimit n
-      play <- randomRIO (1, maxPlay)
-      return (Just play)
-    else return Nothing
+type NimResult = NimPlayerId -- who won
 
-nimLegality :: State NimGame -> NimPlayerId -> Maybe Int -> Bool
-nimLegality (left, id) playerId Nothing  = id /= playerId
-nimLegality (left, id) playerId (Just n) = id == playerId && n <= left
+nimMaxTake :: Int
+nimMaxTake = 4
 
-nimUpdate :: State NimGame -> [(PlayerId NimGame, Action NimGame)] -> State NimGame
-nimUpdate (n, _) [(id, action)] =
-  (n - action, other id)
-nimUpdate _ _ = error "Illegal actions (exactly 1 active player required)."
+nimLegal :: NimView -> NimPlayerId -> NimAction -> Bool
+nimLegal (nLeft, activePId) pId (Take n) =
+  activePId == pId && n <= (min nLeft nimMaxTake)
 
-instance Game NimGame where
-  type Options NimGame   =  Int
-  type State NimGame     = (Int, NimPlayerId)
-  type PlayerId NimGame  =  NimPlayerId
-  type Action NimGame    =  Int
-  type Result NimGame    =  NimPlayerId
-  type View NimGame      = (Int, NimPlayerId)  -- perfect information
+nimUpdate :: NimState -> [NimPlayerId] -> [NimAction] -> State RNGState NimState
+nimUpdate (tokens, pId) [pId'] [(Take n)] | pId == pId' =
+  return $ (tokens - n, nextPlayer pId)
+nimUpdate _ _ _ = error "Illegal action configuration."
 
-  new _ n             = (n, First)
+nimTerminal (0, pId) = Just $ nextPlayer pId
+nimTerminal _        = Nothing
 
-  terminal _ (0, player)  = Just (other player)
-  terminal _ _            = Nothing
+nim :: Game NimPlayerId NimState NimView NimAction NimResult
+nim = Game {allPlayers    = const [First, Second],
+            makeView      = \st _ -> st,
 
-  allPlayers _ _ = [First, Second]
-
-  view _ state _ = state
-
-  isLegal _ = nimLegality
-  update _  = nimUpdate
+            active        = \(_, pId) ->  [pId],
+            legal         = nimLegal,
+            
+            update        = nimUpdate,
+            terminal      = nimTerminal}
