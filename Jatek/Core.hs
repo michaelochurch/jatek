@@ -9,8 +9,15 @@ import Control.Monad.Trans
 import qualified Data.Map as M
 import System.Random
 
--- InteractT is "a gamelike process, not necessarily tied to a specific game."
--- Can send Events, await Actions. Has an RNG. Has user state. Lives in a monad. 
+type RNGState = StdGen
+
+-- InteractT is a monad transformer that includes two categories of state: RNG
+-- state (Random) and user state (Stateful). This is to improve usability; it
+-- doesn't give capabilities that a regular StateT wouldn't.
+
+-- Its purpose is to represent, "a gamelike process, not necessarily tied to a
+-- specific game". The "holy grail" is to be able to compose games together and
+-- build larger games out of subgames ("mechanics").
 
 -- i : player ID type (often Int).
 -- s : user state (game state). Keep general if possible.
@@ -20,8 +27,6 @@ import System.Random
 -- m : monad being transformed. Typically IO or Identity. Prefer user state in s
 -- rather than a StateT. 
 -- a : what the interaction returns. 
-
-type RNGState = StdGen
 
 data InteractT i s v t m a =
   Terminal a |
@@ -54,6 +59,14 @@ instance (Monad m) => Monad (InteractT i s v t m) where
 rollDie :: Int -> InteractT i s v t m Int
 rollDie sides =
   Random (\rng -> let (a, rng1) = randomR (1, sides) rng in (Terminal a, rng1))
+
+-- Player types:
+-- i : the same player ID type that the game uses.
+-- v : the view type of the game.
+-- t : the action type of the game. 
+-- m : the monad in which the player executes. Typically, this monad will allow
+-- the player to "record" observed views and choose actions based on knowledge
+-- about the game.
 
 data Player i v t m =
   Player {playerId     :: i,
@@ -111,6 +124,10 @@ send view ids = Send view ids (Terminal ())
 getActions :: (Monad m) => [i] -> InteractT i s v t m [t]
 getActions ids = Await ids return
 
+-- note: the function `legal` takes a view rather than a state, because a player
+-- needs to know what actions are legal _without_ access to the (not visible to
+-- that player) entire game state.
+
 data Game i s v t a =
   Game {allPlayers :: s -> [i],
         makeView   :: s -> i -> v,
@@ -138,7 +155,6 @@ pollPlayers game@(Game {..}) st = do
   if all (\(i, a) -> legalSt game st i a) (zip is as)
     then return as
     else do -- Someone did something illegal. Poll again.
-      --lift . logIt $ "Illegal action from client!!" 
       pollPlayers game st
 
 interpretGame :: (Eq v, Monad m, Show v, Show a) => Game i s v t a -> InteractT i s v t m a
@@ -156,17 +172,25 @@ interpretGame game@(Game {..}) = do
       sendViews game newSt
       interpretGame game
 
-ioPlayerPrompt :: (Show i, Read t) => i -> IO t
-ioPlayerPrompt pId = do
-  putStr $ "[" ++ (show pId) ++ "] Action? "
-  out <- read <$> getLine
-  putStrLn ""
-  return out
+consolePlayerHandleView :: (Show v, Show i) => i -> v -> IO ()
+consolePlayerHandleView pId view = do
+  putStrLn $ "[" ++ (show pId) ++ "] Received view " ++ (show view)
 
-ioPlayer :: (Show v, Show i, Read t) => i -> Player i v t IO
-ioPlayer pId = Player {playerId     = pId,
-                       handleView   = print,
-                       chooseAction = ioPlayerPrompt pId}
+consolePlayerChooseAction :: (Show i, Read t) => i -> IO t
+consolePlayerChooseAction pId =
+  loop where
+    loop = do
+      putStr $ "[" ++ (show pId) ++ "] Action? "
+      res <- reads <$> getLine
+      putStrLn ""
+      case res of
+        [(out, "")] -> return out
+        _           -> putStrLn "Illegal action!" >> loop
+
+consolePlayer pId =
+  Player {playerId     = pId,
+          handleView   = consolePlayerHandleView pId,
+          chooseAction = consolePlayerChooseAction pId}
 
 mkIoPlayers :: (Show v, Ord i, Show i, Read t) => [i] -> Players i v t IO
-mkIoPlayers pIds = M.fromList $ map (\i -> (i, ioPlayer i)) pIds
+mkIoPlayers pIds = M.fromList $ map (\i -> (i, consolePlayer i)) pIds
