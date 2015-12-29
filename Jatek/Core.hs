@@ -38,8 +38,8 @@ instance (Monad m) => Applicative (InteractT i s v t m) where
   pure = return
   (<*>) = ap
 
-magic :: (Monad m) => (s -> (m a, s)) -> (a -> m b) -> s -> (m b, s)
-magic cont k s =
+bindStatelike :: (Monad m) => (s -> (m a, s)) -> (a -> m b) -> s -> (m b, s)
+bindStatelike cont k s =
   let (ma, s1) = cont s in (ma >>= k, s1)
 
 instance (Monad m) => Monad (InteractT i s v t m) where 
@@ -47,8 +47,8 @@ instance (Monad m) => Monad (InteractT i s v t m) where
   (Terminal a)     >>= k = k a
   (Send v ps cont) >>= k = Send v ps (cont >>= k)
   (Await ps cont)  >>= k = Await ps (\ts -> (cont ts) >>= k)
-  (Random cont)    >>= k = Random $ magic cont k
-  (Stateful cont)  >>= k = Stateful $ magic cont k
+  (Random cont)    >>= k = Random $ bindStatelike cont k
+  (Stateful cont)  >>= k = Stateful $ bindStatelike cont k
   (M ma)           >>= k = M $ fmap (flip (>>=) k) ma
 
 rollDie :: Int -> InteractT i s v t m Int
