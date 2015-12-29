@@ -7,6 +7,7 @@ import Control.Monad (foldM, forM, forM_, join, when)
 import Control.Monad.State.Strict
 import Control.Monad.Trans
 import qualified Data.Map as M
+import System.IO (hFlush, stdout)
 import System.Random
 
 type RNGState = StdGen
@@ -160,6 +161,7 @@ pollPlayers game@(Game {..}) st = do
 interpretGame :: (Eq v, Monad m, Show v, Show a) => Game i s v t a -> InteractT i s v t m a
 interpretGame game@(Game {..}) = do
   st <- get
+  sendViews game st
   case terminal st of
     Just result -> return result
     Nothing     -> do
@@ -169,7 +171,6 @@ interpretGame game@(Game {..}) = do
       let (newSt, newRand) = (update st playerIds actions) `runState` oldRand
       setRand newRand
       put newSt
-      sendViews game newSt
       interpretGame game
 
 consolePlayerHandleView :: (Show v, Show i) => i -> v -> IO ()
@@ -181,6 +182,7 @@ consolePlayerChooseAction pId =
   loop where
     loop = do
       putStr $ "[" ++ (show pId) ++ "] Action? "
+      hFlush stdout
       res <- reads <$> getLine
       putStrLn ""
       case res of
