@@ -76,10 +76,10 @@ data Player i v t m =
 
 type Players i v t m = M.Map i (Player i v t m)
 
-runInteractT :: (Ord i, Show i, Monad m) => InteractT i s v t m a -> StdGen -> s -> (Players i v t m) -> m a
+runInteractT :: (Ord i, Show i, Monad m) => InteractT i s v t m a -> StdGen -> s -> (Players i v t m) -> m (a, StdGen, s)
 runInteractT remt r0 s0 players =
   case remt of
-    Terminal a -> return a
+    Terminal a -> return (a, r0, s0)
     Send view ps cont -> do
       forM_ ps $ \i ->
         case M.lookup i players of
@@ -177,7 +177,7 @@ consolePlayerHandleView :: (Show v, Show i) => i -> v -> IO ()
 consolePlayerHandleView pId view = do
   putStrLn $ "[" ++ (show pId) ++ "] Received view " ++ (show view)
 
-consolePlayerChooseAction :: (Show i, Read t) => i -> IO t
+consolePlayerChooseAction :: (Show i, Read t, Show t) => i -> IO t
 consolePlayerChooseAction pId =
   loop where
     loop = do
@@ -187,12 +187,12 @@ consolePlayerChooseAction pId =
       putStrLn ""
       case res of
         [(out, "")] -> return out
-        _           -> putStrLn "Illegal action!" >> loop
+        _           -> putStrLn ("Illegal action! " ++ (show res)) >> loop
 
 consolePlayer pId =
   Player {playerId     = pId,
           handleView   = consolePlayerHandleView pId,
           chooseAction = consolePlayerChooseAction pId}
 
-mkIoPlayers :: (Show v, Ord i, Show i, Read t) => [i] -> Players i v t IO
-mkIoPlayers pIds = M.fromList $ map (\i -> (i, consolePlayer i)) pIds
+mkConsolePlayers :: (Show v, Ord i, Show i, Read t, Show t) => [i] -> Players i v t IO
+mkConsolePlayers pIds = M.fromList $ map (\i -> (i, consolePlayer i)) pIds
