@@ -79,9 +79,6 @@ instance Read Card where
       Just card -> [(card, "")]
       Nothing   -> []
 
-isHonor :: Card -> Bool
-isHonor (Card r _) = r > 10
-
 pointValue :: Card -> Int
 pointValue (Card r s) =
   case s of
@@ -100,6 +97,7 @@ nextPos :: Int -> Int
 nextPos n = (n + 1) `mod` 4
 
 -- Perhaps this should have been done w/ "real" dependent types.
+-- investigate Nat type... lots of ugly reinvention here.
 newtype Tup4 a = Tup4 {fromTup4 :: (a, a, a, a)} deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 tup4Lens :: Lens (Tup4 a) (Tup4 a) (a, a, a, a) (a, a, a, a)
@@ -213,7 +211,7 @@ maxIndex f xs =
 winnerOfTrick :: Suit -> Tup4 Card -> Int
 winnerOfTrick ledSuit cards =
   maxIndex score cards
-  where honor = any ((>=) jack . rank) cards
+  where honor = any (\(Card r s) -> r >= jack && s == ledSuit) cards
         score c = if (suit c) == ledSuit
                   then if honor && (rank c) == 2 then 100 else unRank (rank c)
                   else -100
