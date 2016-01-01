@@ -8,6 +8,8 @@ import Jatek.Core
 import Games.Ambition
 import Games.Nim
 
+import Util.PlayingCards
+
 -- Play a nim game
 playNim :: IO ()
 playNim = do
