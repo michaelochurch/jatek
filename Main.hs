@@ -27,3 +27,6 @@ ambition1Trick = do
     hand2 = [(Card 3 Spade), (Card 5 Diamond)]
     hand3 = [(Card jack Diamond), (Card 3 Diamond)]
     hand4 = [(Card ace Diamond), (Card 7 Diamond)]
+
+main :: IO ()
+main = ambition1Trick

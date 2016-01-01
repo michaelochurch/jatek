@@ -7,7 +7,9 @@ import Control.Monad (join)
 import Control.Monad.State.Strict
 import Data.Monoid (Sum(..), getSum)
 import Data.Maybe (fromJust)
+
 import Jatek.Core
+import Jatek.Interact
 
 data Suit = Diamond | Spade | Heart | Club deriving (Show, Eq, Enum, Read)
 newtype Rank = Rank {unRank :: Int} deriving (Eq, Ord, Num, Enum, Read)

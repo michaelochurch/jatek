@@ -4,6 +4,7 @@ import Control.Monad.State.Strict
 import System.Random
 
 import Jatek.Core
+import Jatek.Interact
 
 data NimPlayerId = First | Second deriving (Eq, Ord, Show, Read)
 
