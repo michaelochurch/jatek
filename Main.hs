@@ -10,7 +10,6 @@ import Games.Nim
 
 import Util.PlayingCards
 
--- Play a nim game
 playNim :: IO ()
 playNim = do
   result <-runInteractT (interpretGame nim) (mkStdGen 0) (16, First) players
