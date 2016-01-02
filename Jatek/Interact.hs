@@ -144,5 +144,15 @@ testInteractT :: (Read c, Show c, Show s, Show i) =>
 testInteractT remt seed s0 =
   runInteractT remt (mkStdGen seed) s0 consoleClient
 
-liftI :: (c' -> c) -> (s -> s') -> Lens' u' u -> InteractT i u c s m a -> InteractT i u' c' s' m a
-liftI = undefined
+liftI :: (Monad m) => (c' -> c) -> (s -> s') -> Lens' u' u -> InteractT i u c s m a ->
+         InteractT i u' c' s' m a
+liftI fClient fServer lUser intSt =
+  case intSt of
+    Terminal a        -> Terminal a
+    Send msg ids cont -> Send (fServer msg) ids (go cont)
+    Await ids cont    -> Await ids $ \msgs -> go $ cont (map fClient msgs)
+    Random cont       -> Random   $ \r -> let (next, r1) = cont r in (go next, r1) 
+    Stateful cont     -> Stateful $ \u ->
+                            let (next, u1) = cont (u ^. lUser) in (go next, u & lUser .~ u1)
+    M cont            -> M $ fmap go cont
+  where go = liftI fClient fServer lUser

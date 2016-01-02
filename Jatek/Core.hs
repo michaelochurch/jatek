@@ -59,27 +59,3 @@ interpretGame game@(Game {..}) = do
       putRand newRand
       put newSt
       interpretGame game
-
--- consolePlayerHandleView :: (Show v, Show i) => i -> v -> IO ()
--- consolePlayerHandleView pId view = do
---   putStrLn $ "[" ++ (show pId) ++ "] Received view " ++ (show view)
-
--- consolePlayerChooseAction :: (Show i, Read t, Show t) => i -> IO t
--- consolePlayerChooseAction pId =
---   loop where
---     loop = do
---       putStr $ "[" ++ (show pId) ++ "] Action? "
---       hFlush stdout
---       res <- reads <$> getLine
---       putStrLn ""
---       case res of
---         [(out, "")] -> return out
---         _           -> putStrLn ("Illegal action! " ++ (show res)) >> loop
-
--- consolePlayer pId =
---   Player {playerId     = pId,
---           handleView   = consolePlayerHandleView pId,
---           chooseAction = consolePlayerChooseAction pId}
-
--- mkConsolePlayers :: (Show v, Ord i, Show i, Read t, Show t) => [i] -> Players i v t IO
--- mkConsolePlayers pIds = M.fromList $ map (\i -> (i, consolePlayer i)) pIds
