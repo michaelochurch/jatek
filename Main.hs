@@ -4,6 +4,7 @@ import Control.Monad (foldM, when)
 import System.Random (mkStdGen, randomRIO)
 
 import Jatek.Core
+import Jatek.Interact
 
 import Games.Ambition
 import Games.Nim
@@ -12,16 +13,14 @@ import Util.PlayingCards
 
 playNim :: IO ()
 playNim = do
-  result <-runInteractT (interpretGame nim) (mkStdGen 0) (16, First) players
+  result <- testInteractT (interpretGame nim) 0 (16, First)
   putStrLn $ "!! Winner was " ++ (show result)
-  where players = mkConsolePlayers [First, Second]
 
 ambition1Trick :: IO ()
 ambition1Trick = do
-  result <- runInteractT (interpretGame trick) (mkStdGen 0) initState players
+  result <- testInteractT (interpretGame trick) 0 initState
   putStrLn $ "!! Winner was " ++ (show result)
   where
-    players = mkConsolePlayers [0, 1, 2, 3]
     initState = TrickState 1 2 (Tup4 (hand1, hand2, hand3, hand4))
                 (Tup4 (Nothing, Nothing, Nothing, Nothing))
     hand1 = [(Card 7 Heart), (Card king Club)]
