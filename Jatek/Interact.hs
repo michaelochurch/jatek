@@ -68,9 +68,3 @@ runInteractT intx system =
        sync system send >>= (\intx1 -> runInteractT (cont intx1) system)
      M cont ->
        cont >>= (\intx1 -> runInteractT intx1 system)
-
-
-
--- testInteractT :: (Read c, Show c, Show s, Show i) =>
---                  InteractT i c s IO a -> IO a
--- testInteractT remt = runInteractT remt consoleClient
