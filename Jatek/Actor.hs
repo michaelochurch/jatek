@@ -1,6 +1,13 @@
-{-# LANGUAGE ExistentialQuantification, FlexibleInstances, FunctionalDependencies, KindSignatures, MultiParamTypeClasses #-}
+{-# LANGUAGE ExistentialQuantification, FlexibleInstances, FunctionalDependencies, KindSignatures, MultiParamTypeClasses, TupleSections #-}
 
-import Data.Typeable
+module Jatek.Actor where
+
+-- NOTE: this is not intended as a general-purpose Actor library. Its main
+-- purpose is to reify (through System) abstractions like InteractT. 
+
+import Control.Monad
+import Data.IORef
+import System.Random
 
 class Actor m a b self | self -> a, self -> b, self -> m where
    act :: self -> a -> m b
@@ -32,10 +39,19 @@ instance (Show a, Read b) => Actor IO a b (ConsoleActor IO a b) where
             _ -> (putStrLn "Invalid Input!") >> loop
     in loop
 
+data RandomIOActor = RandomIOActor (IORef StdGen)
+
+instance Actor IO Int Int RandomIOActor where
+  act (RandomIOActor cell) n = do
+    gen <- readIORef cell
+    let (a, gen1) = randomR (0, (n - 1)) gen
+    writeIORef cell gen1
+    return a
+
 data System i m a b = System [(i, SomeActor m a b)]
 
-send :: (Eq i) => System i m a b -> i -> a -> m b
-send (System sys) i a =
+sendMessage :: (Eq i) => System i m a b -> i -> a -> m b
+sendMessage (System sys) i a =
   case lookup i sys of
     Just actor -> act actor a
     Nothing    -> error "No actor with given id."
@@ -46,7 +62,27 @@ purely f = SomeActor $ PureActor f
 console :: (Show a, Read b) => SomeActor IO a b
 console = SomeActor $ (ConsoleActor :: ConsoleActor IO a b)
 
-sys0 :: System String IO Int Int
-sys0 = System [("console", console),
-               ("doubler", purely (*2))]
+randActor :: Int -> IO (SomeActor IO Int Int)
+randActor seed = do
+  let gen = mkStdGen seed
+  cell <- newIORef gen
+  return $ SomeActor $ (RandomIOActor cell)
+
+-- TODO: parallel version of sync (when we have long sys calls for networked
+-- server stuff).
+sync :: (Monad m, Eq i) => System i m a b -> [(i, a)] -> m [(i, b)]
+sync system msgs =
+  forM msgs $ \(i, a) -> fmap (i,) (sendMessage system i a)
+
+sys0 :: IO (System String IO Int Int)
+sys0 = do
+  rand <- randActor 1337
+  return $ System [("console", console),
+                   ("doubler", purely (*2)),
+                   ("random",  rand)]
+
+actorDemo = do
+  sys <- sys0
+  sync sys [("console", 1), ("doubler", 4), ("random", 20)] >>= print
+  sync sys [("doubler", 21), ("random", 20)] >>= print
 

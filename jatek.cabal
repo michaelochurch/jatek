@@ -19,6 +19,6 @@ executable jatek
   main-is:             Main.hs
   -- other-modules:       Games.Ambition
   -- other-extensions:    
-  build-depends:       base >=4.8 && <4.9, containers, lens, mtl, profunctors, random
+  build-depends:       base >=4.8 && <4.9, containers, lens, mtl, profunctors, random, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010
