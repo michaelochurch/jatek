@@ -11,8 +11,6 @@ import System.Random
 
 import Jatek.Actor
 
-type RNGState = StdGen
-
 -- InteractT is a monad transformer that includes two categories of state: RNG
 -- state (Random) and user state (Stateful). This is to improve usability; it
 -- doesn't give capabilities that a regular StateT wouldn't.
