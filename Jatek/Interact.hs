@@ -60,11 +60,13 @@ instance MonadTrans (InteractT i c s) where
 instance MonadIO (InteractT i c s IO) where
   liftIO = lift
 
-runInteractT :: (Monad m, Eq i) => InteractT i c s m a -> System i m s c -> m a
+-- WARNING: In stateful monads, e.g. m = IO, this *can* side-effect the System.
+-- That's by design. 
+runInteractT :: (Monad m, Ord i) => InteractT i c s m a -> System i m s c -> m a
 runInteractT intx system =
    case intx of
      Terminal a -> return a
      Talk send cont ->
-       sync system send >>= (\intx1 -> runInteractT (cont intx1) system)
+       sync system send >>= (\(intx1, sys1) -> runInteractT (cont intx1) sys1)
      M cont ->
        cont >>= (\intx1 -> runInteractT intx1 system)
