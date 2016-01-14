@@ -8,7 +8,6 @@ import Control.Monad.State.Strict
 import Data.Monoid (Sum(..), getSum)
 import Data.Maybe (fromJust)
 
-import Jatek.Core
 import Jatek.Interact
 import Jatek.Mechanic
 import Util.PlayingCards
