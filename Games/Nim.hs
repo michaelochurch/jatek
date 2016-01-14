@@ -32,14 +32,10 @@ nimUpdate _ _ _ = error "Illegal action configuration."
 nimTerminal (0, pId) = Just $ nextPlayer pId
 nimTerminal _        = Nothing
 
--- nim :: Game NimPlayerId NimState NimView NimAction NimResult
--- nim = Game {allPlayers    = const [First, Second],
---             makeView      = \st _ -> st,
-
---             active        = \(_, pId) ->  [pId],
---             legal         = nimLegal,
-            
---             update        = nimUpdate,
---             terminal      = nimTerminal}
-
-nim = undefined
+nim :: Mechanic NimPlayerId NimState NimView NimAction NimResult
+nim = Mechanic {players  = const [First, Second],
+                makeView = \st _ -> st,
+                active   = \(_, pId) -> [pId],
+                legal    = nimLegal,
+                update   = nimUpdate,
+                terminal = nimTerminal}
