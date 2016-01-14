@@ -10,7 +10,10 @@ import Data.Maybe (fromJust)
 
 import Jatek.Core
 import Jatek.Interact
+import Jatek.Mechanic
 import Util.PlayingCards
+
+data PlayerId = Random | Player Int deriving (Eq, Show)
 
 pointValue :: Card -> Int
 pointValue (Card r s) =
@@ -21,13 +24,12 @@ pointValue (Card r s) =
     Diamond -> if r > 10 then 3 else 1
 
 firstTrickValue :: Int
-firstTrickValue = 9
+firstTrickValue = 10
 
 nextPos :: Int -> Int
-nextPos n = (n + 1) `mod` 4
+nextPos n = (n + 1 `mod` 4)
 
--- Perhaps this should have been done w/ "real" dependent types.
--- investigate Nat type... lots of ugly reinvention here.
+-- TODO: investigate using Nat from GHC.TypeLits to get what I want for sized vectors.
 newtype Tup4 a = Tup4 {fromTup4 :: (a, a, a, a)} deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 tup4Lens :: Lens (Tup4 a) (Tup4 a) (a, a, a, a) (a, a, a, a)
@@ -88,16 +90,12 @@ ledSuit obj =
   if obj ^. trickNum == 1 then Just Diamond
   else fmap suit $ obj ^. (tablePos $ obj ^. leadPos)
 
--- Ambition always has exactly 4 players.
-all4Players :: [Int]
-all4Players = [0..3]
-
 -- Find the first player who hasn't played to the trick.
-trickActive :: TrickState -> [Int]
+trickActive :: TrickState -> [PlayerId]
 trickActive ts =
   case filter check (rotateL theLeadPos [0..3]) of
     []     -> []
-    (x:_)  -> [x]
+    (x:_)  -> [Player x]
   where check n = ts ^. (tablePos n) == Nothing
         theLeadPos = ts ^. leadPos
         rotateL n list = (drop n list) ++ (take n list)
@@ -105,32 +103,39 @@ trickActive ts =
 hasSuit :: [Card] -> Suit -> Bool
 hasSuit cards s = any ((== s) . suit) cards
 
-trickLegal :: TrickView -> Int -> Card -> Bool
-trickLegal tv pos card =
+trickLegal :: TrickView -> PlayerId -> Card -> Bool
+trickLegal tv (Player _) card =
   case ledSuit tv of
     Just ls ->
       if hasSuit (tvHand tv) ls
       then (suit card) == ls
       else True
     Nothing -> True
+trickLegal _ Random _ = False
+
+-- not going to worry about this because I'm probably getting rid of legal1.
+-- the "null client" that knows nothing isn't very useful in practice 
+trickLegal1 :: TrickView -> PlayerId -> Card
+trickLegal1 = undefined
 
 data TrickResult = TrickResult {cardsPlayed :: Tup4 Card,
                                 whoWon      :: Int,
                                 points      :: Int} deriving (Eq, Show)
 
-trickMakeView :: TrickState -> Int -> TrickView
-trickMakeView ts@TrickState {..} n =
+trickMakeView :: TrickState -> PlayerId -> TrickView
+trickMakeView ts@TrickState {..} (Player n) =
   TrickView {tvTrickNum = tsTrickNum,
              tvTable    = tsTable,
              tvLeadPos  = tsLeadPos,
              tvHand     = tsHands ^. (tup4 n)}
+trickMakeView _ _ = error "Random player uses no views"
 
-trickUpdate' :: TrickState -> Int -> Card -> State RNGState TrickState
+trickUpdate' :: TrickState -> Int -> Card -> TrickState
 trickUpdate' ts pos card =
-  return $ ts & table . (tup4 pos) .~ (Just card)
+  ts & table . (tup4 pos) .~ (Just card)
 
-trickUpdate :: TrickState -> [Int] -> [Card] -> State RNGState TrickState
-trickUpdate ts [pos] [card] = trickUpdate' ts pos card
+trickUpdate :: TrickState -> [PlayerId] -> [Card] -> TrickState
+trickUpdate ts [(Player pos)] [card] = trickUpdate' ts pos card
 trickUpdate _ _ _ = error "trick play is strictly one-at-a-time"
 
 -- TODO: implement a zipTraversable and bypass the list conversion.
@@ -161,10 +166,44 @@ trickTerminal ts =
                            points      = pointValueOfTrick (ts ^. trickNum == 1) cards}
   else Nothing
 
-trick :: Game Int TrickState TrickView Card TrickResult
-trick = Game {allPlayers = const all4Players,
-              makeView   = trickMakeView,
-              active     = trickActive,
-              legal      = trickLegal,
-              update     = trickUpdate,
-              terminal   = trickTerminal}
+trick :: Mechanic PlayerId TrickState TrickView Card TrickResult
+trick = Mechanic {players = const (map Player [0..3]),
+                  makeView   = trickMakeView,
+                  active     = trickActive,
+                  legal      = trickLegal,
+                  legal1     = trickLegal1,
+                  update     = trickUpdate,
+                  terminal   = trickTerminal}
+
+-- trick :: Game Int TrickState TrickView Card TrickResult
+-- trick = Game {allPlayers = const all4Players,
+--               makeView   = trickMakeView,
+--               active     = trickActive,
+--               legal      = trickLegal,
+--               update     = trickUpdate,
+--               terminal   = trickTerminal}
+
+data RoundResult = RoundResult {rrTrickHistory :: TrickResult,
+                                rrPointsTaken  :: Tup4 Int,
+                                rrPointsScored :: Tup4 Int,
+                                rrStrikes      :: Tup4 Int}
+
+data RoundState = BeforePass {rsRoundNum :: Int, rsHands :: Tup4 [Card]}
+                | PlayingTricks {rsRoundNum    :: Int,
+                                 trickState    :: TrickState,
+                                 trickHistory  :: [TrickResult],
+                                 rsPointsTaken :: Tup4 Int}
+                | RoundFinished RoundResult
+
+data RoundView = RVBeforePass {rvRoundNum :: Int, rvHand :: [Card]}
+               | RVPlayingTricks {rvRoundNum :: Int,
+                                  trickView  :: TrickView,
+                                  lastTrick  :: TrickResult,
+                                  rvPointsTaken :: Tup4 Int}
+               | RVRoundFinished RoundResult
+
+data RoundAction = PlayCard Card | PassCards (Card, Card, Card)
+
+
+-- trick :: InteractT Int TrickState Card TrickView m TrickResult
+-- desire InteractT Int RoundState RoundAction m TrickResult
