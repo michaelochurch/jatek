@@ -3,7 +3,7 @@
 module Jatek.Interact where
 
 import Control.Lens
-import Control.Arrow (first)
+import Control.Arrow (first, second)
 import Control.Monad (ap, liftM)
 import Control.Monad.State.Strict
 import System.IO (hFlush, stdout)
@@ -82,3 +82,16 @@ runInteractT intx system st =
        let (intx1, st1) = cont st in runInteractT intx1 system st1
      M cont ->
        cont >>= (\intx1 -> runInteractT intx1 system st)
+
+liftInteractT :: (Monad m, Ord i) =>
+                 (c' -> c) -> (s -> s') -> Lens' u' u ->
+                 InteractT i u c s m a -> InteractT i u' c' s' m a
+
+liftInteractT cf sf uLens intx =
+  case intx of
+    Terminal a     -> Terminal a
+    Talk send cont -> Talk (map (second sf) send)
+                           (liftInteractT cf sf uLens . cont . map (second cf))
+    Stateful cont  -> Stateful (\u' -> let (intx1, u1) = cont (view uLens u') in
+                                 (liftInteractT cf sf uLens intx1, set uLens u1 u'))
+    M cont         -> M $ fmap (liftInteractT cf sf uLens) cont
