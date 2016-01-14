@@ -32,3 +32,6 @@ shuffle vec = loop 0 vec
             j <- getInt (i, len - 1)
             loop (i + 1) (swap vec i j)
         swap v i j = v V.// [(i, v V.! j), (j, v V.! i)]
+
+shuffleList :: (MonadRandom m) => [a] -> m [a]
+shuffleList list = V.toList <$> shuffle (V.fromList list)
