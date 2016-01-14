@@ -70,6 +70,17 @@ instance MonadTrans (InteractT i u c s) where
 instance MonadIO (InteractT i u c s IO) where
   liftIO = lift
 
+talk :: [(i, s)] -> ([(i, c)] -> InteractT i u c s m a) -> InteractT i u c s m a
+talk = Talk
+
+procure :: [i] -> (i -> s) -> (i -> c -> a) -> InteractT i u c s m [(i, a)]
+procure ids sf cf =
+  Talk (map (\i -> (i, sf i)) ids)
+       (\ics -> Terminal $ map (\(i, c) -> (i, cf i c)) ics)
+
+send :: [(i, s)] -> InteractT i u c s m ()
+send msgs = Talk msgs (\_ -> Terminal ())
+
 -- WARNING: In stateful monads, e.g. m = IO, this *can* side-effect the System.
 -- That's by design. 
 runInteractT :: (Monad m, Ord i) => InteractT i u c s m a -> System i m s c -> u -> m (a, u)

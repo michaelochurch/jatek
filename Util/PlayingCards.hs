@@ -2,6 +2,13 @@
 
 module Util.PlayingCards where
 
+import Control.Monad.State.Strict
+import qualified Data.Vector as V
+import System.Random
+
+import Jatek.Interact
+import Jatek.Random
+
 data Suit = Diamond | Spade | Heart | Club deriving (Show, Eq, Enum, Read)
 newtype Rank = Rank {unRank :: Int} deriving (Eq, Ord, Num, Enum, Read)
 

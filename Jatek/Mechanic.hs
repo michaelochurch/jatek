@@ -77,6 +77,3 @@ runMechanic mx = do
       sendUpdates mx u u1 
       put u1    
       runMechanic mx
-
--- mClient :: (String -> Either String t) -> Client (ClientMessage t) (ServerMessage v)
--- mClient parseUser = undefined
