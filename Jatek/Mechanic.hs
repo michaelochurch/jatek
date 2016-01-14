@@ -8,10 +8,10 @@ import qualified Data.Map as M
 import Jatek.Actor
 import Jatek.Interact
 
-data ServerMessage v t = ViewChanged v | NeedAction v | LegalActionIs t |
+data ServerMessage v t = ViewChanged v | NeedAction v |
                          AcceptAction | RejectAction deriving Show
 
-data ClientMessage t = TryAction t | WantLegalAction deriving Show
+newtype ClientMessage t = TryAction t deriving Show
 
 data Mechanic i s v t a =
   Mechanic {players  :: s -> [i],
@@ -19,7 +19,6 @@ data Mechanic i s v t a =
 
             active   :: s -> [i],
             legal    :: v -> i -> t -> Bool,
-            legal1   :: v -> i -> t,
 
             update   :: s -> [i] -> [t] -> s,
             terminal :: s -> Maybe a}
@@ -41,15 +40,10 @@ handleClients mx@(Mechanic {..}) s =
             let needActionIds = filter (not . flip M.member acc) involved
             clientMsgs <- procure needActionIds
                             (NeedAction . makeView s) (\_i c -> c)
-            let outcomes = map (\(i, cm) ->
-                                  case cm of
-                                    WantLegalAction ->
-                                      let act = legal1 (makeView s i) i
-                                      in (i, LegalActionIs act, act) 
-                                    TryAction t ->
-                                      if legal (makeView s i) i t
-                                      then (i, AcceptAction, t)
-                                      else (i, RejectAction, t)) clientMsgs
+            let outcomes = map (\(i, (TryAction t)) ->
+                                 if legal (makeView s i) i t
+                                 then (i, AcceptAction, t)
+                                 else (i, RejectAction, t)) clientMsgs
                 h (i, AcceptAction, t) = Just (i, t)
                 h (i, _           , t) = Nothing
                 newAcc    = M.union acc $ M.fromList (collect $ map h outcomes)

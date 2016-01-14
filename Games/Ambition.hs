@@ -113,11 +113,6 @@ trickLegal tv (Player _) card =
     Nothing -> True
 trickLegal _ Random _ = False
 
--- not going to worry about this because I'm probably getting rid of legal1.
--- the "null client" that knows nothing isn't very useful in practice 
-trickLegal1 :: TrickView -> PlayerId -> Card
-trickLegal1 = undefined
-
 data TrickResult = TrickResult {cardsPlayed :: Tup4 Card,
                                 whoWon      :: Int,
                                 points      :: Int} deriving (Eq, Show)
@@ -171,7 +166,6 @@ trick = Mechanic {players = const (map Player [0..3]),
                   makeView   = trickMakeView,
                   active     = trickActive,
                   legal      = trickLegal,
-                  legal1     = trickLegal1,
                   update     = trickUpdate,
                   terminal   = trickTerminal}
 
