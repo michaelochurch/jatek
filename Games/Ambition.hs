@@ -5,6 +5,7 @@ module Games.Ambition where
 import Control.Lens
 import Control.Monad (join)
 import Control.Monad.State.Strict
+import qualified Data.List as L
 import Data.Monoid (Sum(..), getSum)
 import Data.Maybe (fromJust)
 
@@ -50,6 +51,9 @@ data TrickState = TrickState {tsTrickNum :: Int,
                               tsLeadPos :: Int,
                               tsHands   :: Tup4 [Card],
                               tsTable   :: Tup4 (Maybe Card)} deriving (Eq, Show)
+
+hands :: Lens' TrickState (Tup4 [Card])
+hands = lens tsHands (\x v-> x {tsHands = v})
 
 data TrickView = TrickView {tvTrickNum :: Int,
                             tvLeadPos  :: Int,
@@ -128,6 +132,7 @@ trickMakeView _ _ = error "Random player uses no views"
 trickUpdate' :: TrickState -> Int -> Card -> TrickState
 trickUpdate' ts pos card =
   ts & table . (tup4 pos) .~ (Just card)
+     & hands . (tup4 pos) %~ (L.delete card)
 
 trickUpdate :: TrickState -> [PlayerId] -> [Card] -> TrickState
 trickUpdate ts [(Player pos)] [card] = trickUpdate' ts pos card
