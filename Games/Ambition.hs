@@ -12,7 +12,7 @@ import Jatek.Interact
 import Jatek.Mechanic
 import Util.PlayingCards
 
-data PlayerId = Random | Player Int deriving (Eq, Show)
+data PlayerId = Random | Player Int deriving (Eq, Ord, Show)
 
 pointValue :: Card -> Int
 pointValue (Card r s) =
@@ -104,13 +104,14 @@ hasSuit cards s = any ((== s) . suit) cards
 
 trickLegal :: TrickView -> PlayerId -> Card -> Bool
 trickLegal tv (Player _) card =
-  case ledSuit tv of
-    Just ls ->
-      if hasSuit (tvHand tv) ls
-      then (suit card) == ls
-      else True
-    Nothing -> True
-trickLegal _ Random _ = False
+  card `elem` hand && followingSuit
+  where
+    hand = tvHand tv
+    followingSuit = 
+      case ledSuit tv of
+        Just ls ->
+          (suit card) == ls || not (hasSuit hand ls)
+        Nothing -> True
 
 data TrickResult = TrickResult {cardsPlayed :: Tup4 Card,
                                 whoWon      :: Int,
@@ -168,13 +169,6 @@ trick = Mechanic {players = const (map Player [0..3]),
                   update     = trickUpdate,
                   terminal   = trickTerminal}
 
--- trick :: Game Int TrickState TrickView Card TrickResult
--- trick = Game {allPlayers = const all4Players,
---               makeView   = trickMakeView,
---               active     = trickActive,
---               legal      = trickLegal,
---               update     = trickUpdate,
---               terminal   = trickTerminal}
 
 data RoundResult = RoundResult {rrTrickHistory :: TrickResult,
                                 rrPointsTaken  :: Tup4 Int,
