@@ -22,7 +22,7 @@ nimMaxTake = 4
 
 nimLegal :: NimView -> NimPlayerId -> NimAction -> Bool
 nimLegal (nLeft, activePId) pId (Take n) =
-  activePId == pId && n <= (min nLeft nimMaxTake)
+  activePId == pId && 0 < n && n <= (min nLeft nimMaxTake)
 
 nimUpdate :: NimState -> [NimPlayerId] -> [NimAction] -> NimState
 nimUpdate (tokens, pId) [pId'] [(Take n)] | pId == pId' =

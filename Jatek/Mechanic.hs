@@ -4,14 +4,15 @@ module Jatek.Mechanic where
 
 import Control.Monad.State
 import qualified Data.Map as M
+import System.IO
 
 import Jatek.Actor
 import Jatek.Interact
 
-data ServerMessage v t = ViewChanged v | NeedAction v |
-                         AcceptAction | RejectAction deriving Show
+data ServerMessage v = ViewChanged v | NeedAction v |
+                       AcceptAction | RejectAction deriving Show
 
-newtype ClientMessage t = TryAction t deriving Show
+data ClientMessage t = TryAction t | Ok deriving Show
 
 data Mechanic i s v t a =
   Mechanic {players  :: s -> [i],
@@ -28,7 +29,7 @@ collect = foldr (\xOpt acc -> maybe acc (:acc) xOpt) []
 
 handleClients :: (Monad m, Ord i) =>
                  Mechanic i s v t a -> s ->
-                 InteractT i u (ClientMessage t) (ServerMessage v t) m (M.Map i t)
+                 InteractT i u (ClientMessage t) (ServerMessage v) m (M.Map i t)
 handleClients mx@(Mechanic {..}) s =
   loop (M.empty)
   where involved = active s
@@ -52,7 +53,7 @@ handleClients mx@(Mechanic {..}) s =
             loop newAcc
 
 sendUpdates :: (Eq v) => Mechanic i s v t a -> s -> s ->
-               InteractT i s (ClientMessage t) (ServerMessage v t) m ()
+               InteractT i s (ClientMessage t) (ServerMessage v) m ()
 sendUpdates mx@(Mechanic {..}) sOld sNew = send msgs
   where msgs = collect $ map f (players sOld)
         f i  = let vNew = makeView sNew i
@@ -60,7 +61,7 @@ sendUpdates mx@(Mechanic {..}) sOld sNew = send msgs
                   else Nothing
 
 runMechanic :: (Monad m, Ord i, Eq v) => Mechanic i s v t a ->
-               InteractT i s (ClientMessage t) (ServerMessage v t) m a
+               InteractT i s (ClientMessage t) (ServerMessage v) m a
 runMechanic mx = do
   u <- get
   case terminal mx u of
@@ -71,3 +72,28 @@ runMechanic mx = do
       sendUpdates mx u u1 
       put u1    
       runMechanic mx
+
+mkConsoleClient :: (Show v) => (String -> Maybe t) -> String -> SomeActor IO (ServerMessage v) (ClientMessage t)
+mkConsoleClient parser tag =
+  SomeActor $ standardIOActor goConsole
+  where goConsole serverMsg = do
+          putStrLn $ "[" ++ tag ++ "] " ++ (show serverMsg)
+          hFlush stdout
+          case serverMsg of
+            NeedAction _ ->
+              let loop = do
+                           line <- getLine
+                           case parser line of
+                             Just t  -> return $ TryAction t
+                             Nothing -> do
+                               putStrLn "I can't parse that."
+                               loop
+              in loop
+            RejectAction -> putStrLn "That's not a legal move." >> return Ok
+            _            -> return Ok
+
+mkConsoleSystem :: (Show v, Ord i) =>
+                   (String -> Maybe t) -> [i] -> (i -> String) ->
+                   System i IO (ServerMessage v) (ClientMessage t)
+mkConsoleSystem parser ids tag =
+  System $ M.fromList (map (\i -> (i, mkConsoleClient parser (tag i))) ids)

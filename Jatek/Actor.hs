@@ -31,6 +31,9 @@ instance (Monad m) => Actor m a b (PureActor m a b) where
 
 data IOActor a b = IOActor (a -> IO (b, IOActor a b))
 
+standardIOActor :: (a -> IO b) -> IOActor a b
+standardIOActor k = let self = IOActor (\a -> fmap (, self) (k a)) in self
+
 instance Actor IO a b (IOActor a b) where
   act (IOActor f) a = do
     (b, self) <- f a

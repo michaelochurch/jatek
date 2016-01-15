@@ -13,9 +13,13 @@ import Util.PlayingCards
 
 playNim :: IO ()
 playNim = do
-  system <- undefined
-  result <- runInteractT (runMechanic nim) system (16, First)
-  putStrLn $ "!! Winner was " ++ (show result)
+  let system = mkConsoleSystem parseAct [First, Second] show
+  (winner, finalState) <- runInteractT (runMechanic nim) system (16, First)
+  putStrLn $ "!! Winner was " ++ (show winner)
+  where parseAct str =
+          case reads str of
+            [(n, "")] -> Just (Take n)
+            _         -> Nothing
 
 -- ambition1Trick :: IO ()
 -- ambition1Trick = do
