@@ -5,6 +5,7 @@ import System.Random (mkStdGen, randomRIO)
 
 import Jatek.Interact
 import Jatek.Mechanic
+import Jatek.Game
 
 import Games.Nim
 import Games.Ambition
