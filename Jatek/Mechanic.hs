@@ -14,7 +14,7 @@ data ServerMessage v = ViewChanged v | NeedAction v |
 
 data ClientMessage t = TryAction t | Ok deriving Show
 
-data Mechanic i s v t a =
+data Mechanic i s t v a =
   Mechanic {players  :: s -> [i],
             makeView :: s -> i -> v,
 
@@ -28,7 +28,7 @@ collect :: [Maybe a] -> [a]
 collect = foldr (\xOpt acc -> maybe acc (:acc) xOpt) []
 
 handleClients :: (Monad m, Ord i) =>
-                 Mechanic i s v t a -> s ->
+                 Mechanic i s t v a -> s ->
                  InteractT i u (ClientMessage t) (ServerMessage v) m (M.Map i t)
 handleClients mx@(Mechanic {..}) s =
   loop (M.empty)
@@ -52,7 +52,7 @@ handleClients mx@(Mechanic {..}) s =
             send outMsgs
             loop newAcc
 
-sendUpdates :: (Eq v) => Mechanic i s v t a -> s -> s ->
+sendUpdates :: (Eq v) => Mechanic i s t v a -> s -> s ->
                InteractT i s (ClientMessage t) (ServerMessage v) m ()
 sendUpdates mx@(Mechanic {..}) sOld sNew = send msgs
   where msgs = collect $ map f (players sOld)
@@ -60,7 +60,7 @@ sendUpdates mx@(Mechanic {..}) sOld sNew = send msgs
                in if (vNew /=  makeView sOld i) then Just (i, ViewChanged vNew)
                   else Nothing
 
-runMechanic :: (Monad m, Ord i, Eq v) => Mechanic i s v t a ->
+runMechanic :: (Monad m, Ord i, Eq v) => Mechanic i s t v a ->
                InteractT i s (ClientMessage t) (ServerMessage v) m a
 runMechanic mx = do
   u <- get

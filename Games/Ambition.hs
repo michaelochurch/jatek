@@ -166,7 +166,7 @@ trickTerminal ts =
                            points      = pointValueOfTrick (ts ^. trickNum == 1) cards}
   else Nothing
 
-trick :: Mechanic PlayerId TrickState TrickView Card TrickResult
+trick :: Mechanic PlayerId TrickState Card TrickView TrickResult
 trick = Mechanic {players = const (map Player [0..3]),
                   makeView   = trickMakeView,
                   active     = trickActive,
