@@ -174,7 +174,6 @@ trick = Mechanic {players = const (map Player [0..3]),
                   update     = trickUpdate,
                   terminal   = trickTerminal}
 
-
 data RoundResult = RoundResult {rrTrickHistory :: TrickResult,
                                 rrPointsTaken  :: Tup4 Int,
                                 rrPointsScored :: Tup4 Int,
@@ -196,6 +195,6 @@ data RoundView = RVBeforePass {rvRoundNum :: Int, rvHand :: [Card]}
 
 data RoundAction = PlayCard Card | PassCards (Card, Card, Card)
 
+round :: Game PlayerId RoundState RoundAction RoundView RoundResult
+round = undefined
 
--- trick :: InteractT Int TrickState Card TrickView m TrickResult
--- desire InteractT Int RoundState RoundAction m TrickResult
