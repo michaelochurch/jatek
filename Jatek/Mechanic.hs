@@ -8,11 +8,7 @@ import System.IO
 
 import Jatek.Actor
 import Jatek.Interact
-
-data ServerMessage v = ViewChanged v | NeedAction v |
-                       AcceptAction | RejectAction deriving Show
-
-data ClientMessage t = TryAction t | Ok deriving Show
+import Jatek.Message
 
 data Mechanic i s t v a =
   Mechanic {players  :: s -> [i],

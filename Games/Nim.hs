@@ -47,7 +47,7 @@ nim = Mechanic {players  = const [First, Second],
                 terminal = nimTerminal}
 
 data NimTo3State = NimTo3State {_scores       :: M.Map NimPlayerId Int,
-                                _currentRound :: NimState}
+                                _currentRound :: NimState} deriving (Eq, Show)
 
 $(makeLenses ''NimTo3State)
 

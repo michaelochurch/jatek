@@ -22,6 +22,17 @@ playNim = do
             [(n, "")] -> Just (Take n)
             _         -> Nothing
 
+playNim3 :: IO ()
+playNim3 = do
+  let system = mkConsoleSystem parseAct [First, Second] show
+  (result, finalState) <- runInteractT (runGame nimTo3) system (initial nimTo3)
+  putStrLn $ "Result: " ++ (show result)
+  putStrLn $ "Final state: " ++ (show finalState)
+  where parseAct str =
+          case reads str of
+            [(n, "")] -> Just (Take n)
+            _         -> Nothing
+  
 ambition1Trick :: IO ()
 ambition1Trick = do
   let system = mkConsoleSystem parseCard (map Player [0..3]) show
